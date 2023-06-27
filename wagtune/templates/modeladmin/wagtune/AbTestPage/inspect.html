@@ -1,0 +1,180 @@
+{% extends "modeladmin/inspect.html" %}
+{% load wagtune_tags %}
+
+{% block fields_output %}
+
+<div class="row_container">
+    <div>
+        <dl>
+            <dt>test started</dt>
+            <dd>{{ instance.start_date }}</dd>
+            <dt>scheduled end day</dt>
+            <dd>{{ instance.end_date }}</dd>
+            <dt>current test day</dt>
+            <dd>{{ test_day }}</dd>
+            <dt>current best scoring variant</dt>
+            {% if instance.statistics %}
+            <dd>{{ instance.best_scoring_variant }}</dd>
+            {% else %}
+            <dd>no conversion data logged</dd>
+            {% endif %}
+        </dl>
+    </div>
+    <div>
+        <h2>Variants</h2>
+
+        <ul>
+            {% for variant in instance.test_variants %}
+            <li>
+                <a href="{% url 'wagtailadmin_pages:edit' variant.pk %}">{{ variant }} (revision {{ variant.live_revision_id }})</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<div class="row_container" />
+    {% if instance.statistics %}
+    <hr />
+
+    <h2>Statistics overview</h2>
+
+
+    {% provide_overall_stats instance %}
+    {% provide_hook_stats instance %}
+    {% endif %}
+
+
+    <h2>End test</h2>
+
+    To end the test, choose one of the following variants
+
+    <ul>
+        {% for variant in instance.test_variants %}
+        <li>
+            <a href="{% url "end_ab_test" variant.pk %}" class="button">
+                {{ variant.title }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    const renderOverallStats = () => {
+        const ctx = document.getElementById('overall_data_container');
+        const stats = JSON.parse(ctx.dataset.stats);
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: stats.map(stat => stat[0]),
+                datasets: [{
+                    data: stats.map(stat => stat[1])
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: "Overall performance"
+                    },
+                }
+            }
+        });
+    };
+
+    const renderHookStats = () => {
+        const ctx = document.getElementsByClassName('hook_data_container');
+
+        Array.from(ctx).forEach(canvasElement => {
+            const hookName = canvasElement.dataset.hookName;
+            const stats = JSON.parse(canvasElement.dataset.hookStats);
+            const highestDay = parseInt(canvasElement.dataset.highestDay);
+            const footerCallback = (tooltipItems) => {
+                const tooltipItem = tooltipItems[0];
+
+                const day = tooltipItem.dataIndex;
+                const variant = tooltipItem.datasetIndex;
+                const revision = stats[variant].revisions[day];
+
+                return `revision ${revision}`;
+            };
+
+            const days = [...Array(highestDay+1).keys()];
+
+            new Chart(canvasElement, {
+                type: 'line',
+                data: {
+                    labels: days.map(i => i+1),
+                    datasets: stats.map(variant_data => ({
+                        label: variant_data.variant,
+                        data: variant_data.stats,
+                    }))
+                },
+                options: {
+                    interaction: {
+                        intersect: false,
+                        mode: 'point'
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `hook: "${hookName}"`
+                        },
+                        tooltip: {
+                            callbacks: {
+                                footer: footerCallback
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'total hits'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'test day'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    };
+
+    window.onload = () => {
+        renderOverallStats();
+        renderHookStats();
+    };
+</script>
+{% endblock extra_js %}
+
+{% block extra_css %}
+<style>
+    canvas.abtest_graph {
+        background-color: rgba(255, 255, 255, .9);
+        margin: 10px;
+    }
+
+    div.row_container {
+        clear: both;
+    }
+    div.row_container div {
+        width: 50%;
+        float: left;
+    }
+</style>
+{% endblock extra_css %}

@@ -1,0 +1,14 @@
+{% extends "wagtailadmin/base.html" %}
+
+{% block content %}
+<p>
+    You're about to end the A/B test, choosing one variant as the new canonical version
+</p>
+
+<form method="post" action=".">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="submit" />
+</form>
+
+{% endblock %}

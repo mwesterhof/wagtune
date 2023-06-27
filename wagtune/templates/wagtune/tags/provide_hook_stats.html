@@ -1,0 +1,6 @@
+{% load wagtune_tags %}
+
+{% for hook_name, hook_stats in stats.items %}
+    <hr>
+    <canvas class="abtest_graph hook_data_container" data-hook-name="{{ hook_name }}" data-hook-stats="{{ hook_stats|to_json }}" data-highest-day="{{ highest_day }}"></canvas>
+{% endfor %}
