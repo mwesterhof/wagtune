@@ -15,21 +15,17 @@ def to_json(data):
     return json.dumps(data)
 
 
-@register.inclusion_tag('wagtune/tags/provide_overall_stats.html')
-def provide_overall_stats(instance):
-    results = instance.hits_per_variant
-    stats = [
-        (Page.objects.get(pk=pk).title, hits)
-        for pk, hits in results.items()
-    ]
-
-    return {
-        'stats': stats,
-    }
+@register.inclusion_tag('wagtune/tags/overall_stat_table.html')
+def overall_stat_table(instance):
+    return {'stats': instance.overall_stats}
 
 
-@register.inclusion_tag('wagtune/tags/provide_hook_stats.html')
-def provide_hook_stats(instance):
+@register.inclusion_tag('wagtune/tags/overall_stat_graph.html')
+def overall_stat_graph(instance):
+    return {'stats': instance.overall_stats}
+
+
+def get_hook_stats_for_page(instance):
     def _get_stats_for_variant(variant_id, variant_data, highest_day):
         variant = Page.objects.get(pk=variant_id)
         stats = [0 for _ in  range(highest_day+1)]
@@ -85,6 +81,23 @@ def provide_hook_stats(instance):
         for hook_name, hook_data in data.items()
     ])
 
+    return gathered_stats, highest_day
+
+
+@register.inclusion_tag('wagtune/tags/hook_stat_graphs.html')
+def hook_stat_graphs(instance):
+    gathered_stats, highest_day = get_hook_stats_for_page(instance)
+
+    return {
+        'stats': gathered_stats,
+        'highest_day': highest_day,
+    }
+
+
+@register.inclusion_tag('wagtune/tags/hook_stat_tables.html')
+def hook_stat_tables(instance):
+    gathered_stats, highest_day = get_hook_stats_for_page(instance)
+
     return {
         'stats': gathered_stats,
         'highest_day': highest_day,
@@ -104,3 +117,8 @@ def provide_info(context):
     token = token_processor.generate_token(parent.pk, page.pk, page.live_revision_id)
     context['abtest_token'] = token
     return context
+
+
+@register.filter
+def do_sum(values):
+    return sum(values)

@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from django.conf import settings
 from django.db import models
 from django.utils.functional import cached_property
 from django.utils.timezone import now
@@ -11,6 +12,12 @@ from .utils import get_randomized_for_seed
 
 class ABTestPage(Page):
     start_date = models.DateTimeField(auto_now_add=True)
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
     end_date = models.DateField(null=True, blank=True)
     statistics = models.JSONField(null=True, blank=True)
 
@@ -33,7 +40,23 @@ class ABTestPage(Page):
         return variant_hits
 
     @cached_property
+    def overall_stats(self):
+        results = self.hits_per_variant
+        stats = [
+            (Page.objects.get(pk=pk).title, hits)
+            for pk, hits in results.items()
+        ]
+
+        return {
+            'stats': stats,
+        }
+
+    @cached_property
     def best_scoring_variant(self):
+        # if no data exists, always fall back to original
+        if not self.statistics:
+            return self.get_original_page()
+
         hits = self.hits_per_variant
         variant_id = sorted(hits.keys(), key=lambda k: hits[k], reverse=True)[0]
         return Page.objects.get(pk=variant_id)

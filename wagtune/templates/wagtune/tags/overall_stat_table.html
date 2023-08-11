@@ -1,0 +1,14 @@
+<h2>Overall stat table</h2>
+
+<table>
+    <tr>
+        <th>variant</th>
+        <th>score</th>
+    </tr>
+    {% for variant_name, hits in stats.stats %}
+    <tr>
+        <td>{{ variant_name }}</td>
+        <td>{{ hits }}</td>
+    </tr>
+    {% endfor %}
+</table>

@@ -7,7 +7,7 @@
     <div>
         <dl>
             <dt>test started</dt>
-            <dd>{{ instance.start_date }}</dd>
+            <dd>{{ instance.start_date }} by {{ instance.started_by }}</dd>
             <dt>scheduled end day</dt>
             <dd>{{ instance.end_date }}</dd>
             <dt>current test day</dt>
@@ -39,9 +39,9 @@
 
     <h2>Statistics overview</h2>
 
+    {% overall_stat_graph instance %}
+    {% hook_stat_graphs instance %}
 
-    {% provide_overall_stats instance %}
-    {% provide_hook_stats instance %}
     {% endif %}
 
 
@@ -70,7 +70,7 @@
 <script>
     const renderOverallStats = () => {
         const ctx = document.getElementById('overall_data_container');
-        const stats = JSON.parse(ctx.dataset.stats);
+        const stats = JSON.parse(ctx.dataset.stats).stats;
         new Chart(ctx, {
             type: 'pie',
             data: {

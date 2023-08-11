@@ -46,7 +46,7 @@ class CreateABTestView(FormView):
 
     def form_valid(self, form):
         original_page_pk = self.kwargs['pk']
-        ab_test_page = form.create_ab_test(original_page_pk)
+        ab_test_page = form.create_ab_test(original_page_pk, self.request.user)
         return HttpResponseRedirect(reverse('wagtailadmin_explore', args=(ab_test_page.pk,)))
 
 
@@ -56,7 +56,7 @@ class EndABTestView(FormView):
 
     def form_valid(self, form):
         variant_pk = self.kwargs['pk']
-        new_parent = form.end_ab_test(variant_pk)
+        new_parent = form.end_ab_test(variant_pk, self.request.user)
         return HttpResponseRedirect(reverse('wagtailadmin_explore', args=(new_parent.pk,)))
 
 

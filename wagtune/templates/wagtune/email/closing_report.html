@@ -1,0 +1,21 @@
+{% load wagtune_tags %}
+
+<h1>Closing report for A/B test page "{{ ab_test_page }}"</h1>
+
+<dl>
+    <dt>test started</dt>
+    <dd>{{ ab_test_page.start_date }} by {{ ab_test_page.started_by }}</dd>
+    <dt>scheduled end day</dt>
+    <dd>{{ ab_test_page.end_date }}</dd>
+    <dt>best scoring variant</dt>
+    {% if ab_test_page.statistics %}
+    <dd>{{ ab_test_page.best_scoring_variant }}</dd>
+    {% else %}
+    <dd>no conversion data logged</dd>
+    {% endif %}
+    <dt>Final variant</dt>
+    <dd>{{ winning_variant }}</dd>
+</dl>
+
+{% overall_stat_table ab_test_page %}
+{% hook_stat_tables ab_test_page %}

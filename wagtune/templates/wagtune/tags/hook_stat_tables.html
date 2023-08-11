@@ -1,0 +1,21 @@
+{% load wagtune_tags %}
+
+<h2>Hook stats</h2>
+
+{% for hook_name, hook_stats in stats.items %}
+<h3>{{ hook_name }}</h3>
+
+<table>
+    <tr>
+        <th>variant</th>
+        <th>hits</th>
+    </tr>
+    {% for variant in hook_stats %}
+    <tr>
+        <td>{{ variant.variant }}</td>
+        <td>{{ variant.stats|do_sum }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+{% endfor %}

@@ -11,7 +11,9 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'cryptography==40.0.1',
-    'wagtail>5.0,<5.1',
+    'wagtail>4.0,<5.1',
+    'html2text==2020.1.16',
+
 ]
 test_requirements = ['pytest>=3']
 
