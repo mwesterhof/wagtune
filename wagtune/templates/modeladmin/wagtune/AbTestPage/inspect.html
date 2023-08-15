@@ -70,7 +70,7 @@
 <script>
     const renderOverallStats = () => {
         const ctx = document.getElementById('overall_data_container');
-        const stats = JSON.parse(ctx.dataset.stats).stats;
+        const stats = JSON.parse(ctx.dataset.stats);
         new Chart(ctx, {
             type: 'pie',
             data: {

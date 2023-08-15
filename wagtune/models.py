@@ -41,15 +41,16 @@ class ABTestPage(Page):
 
     @cached_property
     def overall_stats(self):
+        if not self.statistics:
+            return []
+
         results = self.hits_per_variant
         stats = [
             (Page.objects.get(pk=pk).title, hits)
             for pk, hits in results.items()
         ]
 
-        return {
-            'stats': stats,
-        }
+        return stats
 
     @cached_property
     def best_scoring_variant(self):

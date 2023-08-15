@@ -96,6 +96,9 @@ def hook_stat_graphs(instance):
 
 @register.inclusion_tag('wagtune/tags/hook_stat_tables.html')
 def hook_stat_tables(instance):
+    if not instance.statistics:
+        return {}
+
     gathered_stats, highest_day = get_hook_stats_for_page(instance)
 
     return {

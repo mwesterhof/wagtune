@@ -28,7 +28,7 @@ def send_report_email(user, variant_page, ab_test_page, was_starter):
     message = EmailMultiAlternatives(
         subject=f"Closing report for test page \"{ab_test_page}\"",
         body=text_content,
-        from_email=settings.EMAIL_FROM,
+        from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
     )
     message.attach_alternative(html_content, 'text/html')
@@ -38,6 +38,7 @@ def send_report_email(user, variant_page, ab_test_page, was_starter):
 def close_ab_test(variant_page, closer_user=None):
     ab_test_parent = variant_page.get_parent()
     starter_user = ab_test_parent.specific.started_by
+    was_original_variant = ab_test_parent.get_children().specific().first() == variant_page
 
     # send stat emails where possible
     if starter_user.email:
@@ -45,19 +46,30 @@ def close_ab_test(variant_page, closer_user=None):
     if closer_user and closer_user.email and closer_user != starter_user:
         send_report_email(closer_user, variant_page, ab_test_parent, was_starter=False)
 
+    # move children of original variant, if necessary
+    if not was_original_variant:
+        original_variant = ab_test_parent.get_children().first()
+        for child in original_variant.get_children():
+            child.move(variant_page, 'last-child')
+        variant_page.refresh_from_db()
+
     # 1. move variant up in tree
     ab_test_slug = ab_test_parent.slug
     new_parent = ab_test_parent.get_parent()
 
-    variant_page.move(ab_test_parent, 'left')
+    variant_page.move(new_parent, 'first-child')
     variant_page.refresh_from_db()
     variant_page.title = variant_page.draft_title = ab_test_parent.title
     variant_page.save()
 
+    ab_test_parent.refresh_from_db()
+
     # 2. remove parent, including obsolete variants
-    ab_test_parent.delete()
     variant_page.slug = ab_test_slug
     variant_page.save()
+
+    ab_test_parent.refresh_from_db()
+    ab_test_parent.delete()  # TODO: figure out what the hell is going on here
 
     # 3. return new parent page of variant (formerly its grandparent)
     return new_parent
