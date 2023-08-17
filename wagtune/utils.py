@@ -1,12 +1,40 @@
 import random
 import os
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from base64 import b64encode, b64decode
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from functools import wraps
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.db import transaction
 from django.template import loader
 from html2text import HTML2Text
+from wagtail.contrib.redirects.signal_handlers import (
+    autocreate_redirects_on_page_move,
+    autocreate_redirects_on_slug_change,
+)
+from wagtail.models import Page
+from wagtail.signals import page_slug_changed, post_page_move
+
+
+
+def disable_auto_redirect(function):
+    def disconnect_signals():
+        post_page_move.disconnect(autocreate_redirects_on_page_move)
+        page_slug_changed.disconnect(autocreate_redirects_on_slug_change)
+
+    def connect_signals():
+        post_page_move.connect(autocreate_redirects_on_page_move)
+        page_slug_changed.connect(autocreate_redirects_on_slug_change)
+
+    @wraps(function)
+    def f(*args, **kwargs):
+        disconnect_signals()
+        result = function(*args, **kwargs)
+        connect_signals()
+        return result
+
+    return f
 
 
 def render_email_content(user, variant_page, ab_test_page, was_starter):
@@ -35,7 +63,47 @@ def send_report_email(user, variant_page, ab_test_page, was_starter):
     message.send()
 
 
+@disable_auto_redirect
+# @transaction.atomic
 def close_ab_test(variant_page, closer_user=None):
+    ab_test_parent = variant_page.get_parent()
+
+    new_slug = ab_test_parent.slug
+    ab_test_parent.slug += '_'
+    ab_test_parent.save()
+
+    # don't just use refresh_from_db(), as this doesn't refresh the treebeard cache
+    variant_page = Page.objects.get(pk=variant_page.pk)
+    new_parent = ab_test_parent.get_parent()
+
+    starter_user = ab_test_parent.specific.started_by
+    was_original_variant = ab_test_parent.get_children().specific().first() == variant_page
+
+    # send stat emails where possible
+    if starter_user.email:
+        send_report_email(starter_user, variant_page, ab_test_parent, was_starter=True)
+    if closer_user and closer_user.email and closer_user != starter_user:
+        send_report_email(closer_user, variant_page, ab_test_parent, was_starter=False)
+
+    if not was_original_variant:
+        original_variant = ab_test_parent.get_children().first()
+        for child in original_variant.get_children():
+            child.move(variant_page, 'last-child')
+
+    variant_page.move(new_parent, 'last-child')
+    variant_page = Page.objects.get(pk=variant_page.pk)
+
+    variant_page.title = ab_test_parent.title
+    variant_page.draft_title = ab_test_parent.draft_title
+    variant_page.slug = new_slug
+
+    variant_page.save()
+    ab_test_parent.delete()
+    return new_parent
+
+
+# @transaction.atomic  # TODO: make sure url paths work with this transaction
+def _close_ab_test(variant_page, closer_user=None):
     ab_test_parent = variant_page.get_parent()
     starter_user = ab_test_parent.specific.started_by
     was_original_variant = ab_test_parent.get_children().specific().first() == variant_page
@@ -51,26 +119,31 @@ def close_ab_test(variant_page, closer_user=None):
         original_variant = ab_test_parent.get_children().first()
         for child in original_variant.get_children():
             child.move(variant_page, 'last-child')
+            child.refresh_from_db()
+            child.set_url_path(variant_page)
+            child.save()
         variant_page.refresh_from_db()
 
     # 1. move variant up in tree
     ab_test_slug = ab_test_parent.slug
     new_parent = ab_test_parent.get_parent()
 
-    variant_page.move(new_parent, 'first-child')
+    variant_page.move(ab_test_parent, 'left')
     variant_page.refresh_from_db()
     variant_page.title = variant_page.draft_title = ab_test_parent.title
     variant_page.save()
 
-    ab_test_parent.refresh_from_db()
+    # ab_test_parent.refresh_from_db()  # TODO: check if this is needed
 
     # 2. remove parent, including obsolete variants
     variant_page.slug = ab_test_slug
     variant_page.save()
 
     ab_test_parent.refresh_from_db()
-    ab_test_parent.delete()  # TODO: figure out what the hell is going on here
+    ab_test_parent.delete()
 
+    variant_page.set_url_path(new_parent)
+    variant_page.save()
     # 3. return new parent page of variant (formerly its grandparent)
     return new_parent
 

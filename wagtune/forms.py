@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from wagtail.models import Page
 
 from .models import ABTestPage
-from .utils import close_ab_test
+from .utils import close_ab_test, disable_auto_redirect
 
 
 class CreateABTestForm(forms.Form):
@@ -20,6 +20,7 @@ class CreateABTestForm(forms.Form):
             raise forms.ValidationError(_("Only future dates are supported"))
         return end_date
 
+    @disable_auto_redirect
     @transaction.atomic
     def create_ab_test(self, original_page_pk, user):
         variant_count = int(self.cleaned_data['variant_count'])
@@ -37,11 +38,11 @@ class CreateABTestForm(forms.Form):
             pos='left'
         )
         ab_test_page.save()
-        original_page.refresh_from_db()
+        original_page = Page.objects.get(pk=original_page.pk)
 
         original_page.move(ab_test_page, 'last-child')
 
-        original_page.refresh_from_db()
+        original_page = Page.objects.get(pk=original_page.pk)
         original_page.title = original_page.draft_title = 'variant 1'
         original_page.slug = 'variant_1'
         original_page.save()
@@ -67,6 +68,6 @@ class CreateABTestForm(forms.Form):
 class EndABTestForm(forms.Form):
     confirmation = forms.BooleanField(required=True)
 
-    @transaction.atomic
+    # @transaction.atomic
     def end_ab_test(self, variant_page_pk, user):
         return close_ab_test(Page.objects.get(pk=variant_page_pk), closer_user=user)
