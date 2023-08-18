@@ -17,7 +17,6 @@ from wagtail.models import Page
 from wagtail.signals import page_slug_changed, post_page_move
 
 
-
 def disable_auto_redirect(function):
     def disconnect_signals():
         post_page_move.disconnect(autocreate_redirects_on_page_move)
@@ -64,8 +63,53 @@ def send_report_email(user, variant_page, ab_test_page, was_starter):
 
 
 @disable_auto_redirect
-# @transaction.atomic
-def close_ab_test(variant_page, closer_user=None):
+@transaction.atomic
+def create_ab_test(original_page_pk, variant_count, end_date, user):
+    from .models import ABTestPage  # noqa
+
+    original_page = Page.objects.get(pk=original_page_pk)
+    original_page_slug = original_page.slug
+
+    ab_test_page = original_page.add_sibling(
+        instance=ABTestPage(
+            title=original_page.title,
+            end_date=end_date,
+            started_by=user,
+        ),
+        pos='left'
+    )
+    ab_test_page.save()
+    original_page = Page.objects.get(pk=original_page.pk)
+
+    original_page.move(ab_test_page, 'last-child')
+
+    original_page = Page.objects.get(pk=original_page.pk)
+    original_page.title = original_page.draft_title = 'variant 1'
+    original_page.slug = 'variant_1'
+    original_page.save()
+
+    ab_test_page.slug = original_page_slug
+    ab_test_page.save()
+
+    for i in range(2, variant_count + 1):
+        variant = original_page.copy(
+            recursive=False,
+            keep_live=False,
+            update_attrs={
+                'slug': f'variant_{i}',
+                'title': f'variant {i}',
+                'draft_title': f'variant {i}',
+            }
+        )
+        variant.save()
+
+    return ab_test_page
+
+
+@disable_auto_redirect
+@transaction.atomic
+def close_ab_test(variant_page_pk, closer_user=None):
+    variant_page = Page.objects.get(pk=variant_page_pk)
     ab_test_parent = variant_page.get_parent()
 
     new_slug = ab_test_parent.slug
@@ -73,7 +117,7 @@ def close_ab_test(variant_page, closer_user=None):
     ab_test_parent.save()
 
     # don't just use refresh_from_db(), as this doesn't refresh the treebeard cache
-    variant_page = Page.objects.get(pk=variant_page.pk)
+    variant_page = Page.objects.get(pk=variant_page_pk)
     new_parent = ab_test_parent.get_parent()
 
     starter_user = ab_test_parent.specific.started_by
@@ -91,7 +135,7 @@ def close_ab_test(variant_page, closer_user=None):
             child.move(variant_page, 'last-child')
 
     variant_page.move(new_parent, 'last-child')
-    variant_page = Page.objects.get(pk=variant_page.pk)
+    variant_page = Page.objects.get(pk=variant_page_pk)
 
     variant_page.title = ab_test_parent.title
     variant_page.draft_title = ab_test_parent.draft_title
@@ -99,52 +143,6 @@ def close_ab_test(variant_page, closer_user=None):
 
     variant_page.save()
     ab_test_parent.delete()
-    return new_parent
-
-
-# @transaction.atomic  # TODO: make sure url paths work with this transaction
-def _close_ab_test(variant_page, closer_user=None):
-    ab_test_parent = variant_page.get_parent()
-    starter_user = ab_test_parent.specific.started_by
-    was_original_variant = ab_test_parent.get_children().specific().first() == variant_page
-
-    # send stat emails where possible
-    if starter_user.email:
-        send_report_email(starter_user, variant_page, ab_test_parent, was_starter=True)
-    if closer_user and closer_user.email and closer_user != starter_user:
-        send_report_email(closer_user, variant_page, ab_test_parent, was_starter=False)
-
-    # move children of original variant, if necessary
-    if not was_original_variant:
-        original_variant = ab_test_parent.get_children().first()
-        for child in original_variant.get_children():
-            child.move(variant_page, 'last-child')
-            child.refresh_from_db()
-            child.set_url_path(variant_page)
-            child.save()
-        variant_page.refresh_from_db()
-
-    # 1. move variant up in tree
-    ab_test_slug = ab_test_parent.slug
-    new_parent = ab_test_parent.get_parent()
-
-    variant_page.move(ab_test_parent, 'left')
-    variant_page.refresh_from_db()
-    variant_page.title = variant_page.draft_title = ab_test_parent.title
-    variant_page.save()
-
-    # ab_test_parent.refresh_from_db()  # TODO: check if this is needed
-
-    # 2. remove parent, including obsolete variants
-    variant_page.slug = ab_test_slug
-    variant_page.save()
-
-    ab_test_parent.refresh_from_db()
-    ab_test_parent.delete()
-
-    variant_page.set_url_path(new_parent)
-    variant_page.save()
-    # 3. return new parent page of variant (formerly its grandparent)
     return new_parent
 
 
