@@ -2,9 +2,11 @@ from collections import defaultdict
 
 from django.conf import settings
 from django.db import models
+from django.http import Http404
 from django.utils.functional import cached_property
 from django.utils.timezone import now
 
+from wagtail.admin.panels import HelpPanel, FieldPanel
 from wagtail.models import Page
 
 from .utils import get_randomized_for_seed
@@ -20,6 +22,11 @@ class ABTestPage(Page):
     )
     end_date = models.DateField(null=True, blank=True)
     statistics = models.JSONField(null=True, blank=True)
+
+    content_panels = Page.content_panels + [
+        FieldPanel('end_date'),
+        HelpPanel(template='admin/panels/abtest_page_help.html'),
+    ]
 
     @property
     def current_day(self):
@@ -78,6 +85,11 @@ class ABTestPage(Page):
 
     def route(self, request, path_components):
         if path_components:
-            return self.get_original_page().route(request, path_components)
+            try:
+                return self.get_original_page().route(request, path_components)
+            except Http404:
+                if path_components[0] != self.get_original_page().slug:
+                    raise
+                return self.get_original_page().route(request, path_components[1:])
         else:
             return super().route(request, path_components)

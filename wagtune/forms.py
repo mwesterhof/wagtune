@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from wagtail.models import Page
 
-from .utils import close_ab_test, create_ab_test, disable_auto_redirect
+from .utils import close_ab_test, create_ab_test
 
 
 class CreateABTestForm(forms.Form):
