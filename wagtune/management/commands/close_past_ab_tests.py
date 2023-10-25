@@ -10,4 +10,4 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         for testpage in ABTestPage.objects.filter(end_date__lt=timezone.now()):
-            close_ab_test(testpage.best_scoring_variant)
+            close_ab_test(testpage.best_scoring_variant.pk)

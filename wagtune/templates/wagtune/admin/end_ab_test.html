@@ -1,14 +1,34 @@
 {% extends "wagtailadmin/base.html" %}
+{% load i18n %}
 
 {% block content %}
+
 <p>
-    You're about to end the A/B test, choosing one variant as the new canonical version
+    {% blocktrans %}
+        You're about to end the A/B test, choosing one variant as the new canonical version
+    {% endblocktrans %}
 </p>
 
+{% if references %}
+<p>
+    {% blocktrans %}
+        The following objects are currently referencing this A/B test page. In order to close the test safely, please update these manually so they point to the winning variant, instead.
+    {% endblocktrans %}
+</p>
+
+<ul>
+    {% for reference in references %}
+    <li>
+        <a href="{{ reference.1 }}">{{ reference.0 }}</a>
+    </li>
+   {% endfor %}
+</ul>
+{% else %}
 <form method="post" action=".">
     {% csrf_token %}
     {{ form.as_p }}
     <input type="submit" />
 </form>
+{% endif %}
 
 {% endblock %}
